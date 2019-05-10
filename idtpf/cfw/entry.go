@@ -9,17 +9,27 @@ import (
 
 func Start(taskHandler idtpf.TaskHandler,
 	taskChan <-chan interface{},
-	workerErrChan chan<- error) {
-	go mainProc(prefab.NewLdgbTaskManager(), taskHandler,
-		*goctpf.NewWorkerSettings(), taskChan, workerErrChan)
+	workerErrChan chan<- error) <-chan struct{} {
+	doneChan := make(chan struct{})
+	go func() {
+		defer close(doneChan)
+		mainProc(prefab.NewLdgbTaskManager(), taskHandler,
+			*goctpf.NewWorkerSettings(), taskChan, workerErrChan)
+	}()
+	return doneChan
 }
 
 func StartEx(taskMgr goctpf.TaskManager,
 	taskHandler idtpf.TaskHandler,
 	workerSettings goctpf.WorkerSettings,
 	taskChan <-chan interface{},
-	workerErrChan chan<- error) {
-	go mainProc(taskMgr, taskHandler, workerSettings, taskChan, workerErrChan)
+	workerErrChan chan<- error) <-chan struct{} {
+	doneChan := make(chan struct{})
+	go func() {
+		defer close(doneChan)
+		mainProc(taskMgr, taskHandler, workerSettings, taskChan, workerErrChan)
+	}()
+	return doneChan
 }
 
 func Do(taskHandler idtpf.TaskHandler,
