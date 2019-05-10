@@ -51,6 +51,7 @@ func workerProc(taskHandler idtpf.TaskHandler,
 				defer taskWg.Done() // Make sure taskWg.Done() can be executed at last.
 				errBuf = errBuf[:0] // Clear errBuf, but keep the underlying array.
 				errToPanic = gorecover.Recover(func() {
+					defer util.PostProcessingOfTaskHandling(task)
 					newTasks, doesExit = taskHandler(task, &errBuf)
 					if doesExit {
 						doesContinue = false

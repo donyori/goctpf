@@ -161,6 +161,7 @@ func workerProc(taskMgrMaker goctpf.TaskManagerMaker,
 			}
 			errBuf = errBuf[:0] // Clear errBuf, but keep the underlying array.
 			errToPanic = gorecover.Recover(func() {
+				defer util.PostProcessingOfTaskHandling(task)
 				newTasks, doesExit = taskHandler(task, &errBuf)
 				if doesExit {
 					doesContinue = false
