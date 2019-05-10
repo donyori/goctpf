@@ -2,6 +2,7 @@ package goctpf
 
 import (
 	"errors"
+	"sync"
 	"sync/atomic"
 )
 
@@ -14,7 +15,8 @@ type TaskGroup struct {
 type TaskGroupMember struct {
 	Task interface{}
 
-	tg *TaskGroup
+	tg       *TaskGroup
+	doneOnce sync.Once
 }
 
 func NewTaskGroup(doneChan <-chan struct{}) *TaskGroup {
@@ -30,14 +32,6 @@ func (tg *TaskGroup) WrapTask(task interface{}) *TaskGroupMember {
 	}
 	atomic.AddInt64(&tg.counter, 1)
 	return &TaskGroupMember{Task: task, tg: tg}
-}
-
-func (tg *TaskGroup) Done() {
-	if tg == nil {
-		return
-	}
-	atomic.AddInt64(&tg.counter, -1)
-	tg.notifyChan <- struct{}{}
 }
 
 func (tg *TaskGroup) Wait() {
@@ -60,4 +54,17 @@ func (tgm *TaskGroupMember) GetTaskGroup() *TaskGroup {
 		return nil
 	}
 	return tgm.tg
+}
+
+func (tgm *TaskGroupMember) Done() {
+	if tgm == nil {
+		return
+	}
+	tgm.doneOnce.Do(func() {
+		c := atomic.AddInt64(&tgm.tg.counter, -1)
+		if c < 0 {
+			panic(errors.New("goctpf: counter of TaskGroup is negative"))
+		}
+		tgm.tg.notifyChan <- struct{}{}
+	})
 }
