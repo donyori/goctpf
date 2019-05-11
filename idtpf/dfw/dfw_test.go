@@ -27,17 +27,51 @@ func TestDFw(t *testing.T) {
 			}
 		}
 	}()
-	handlers := []idtpf.TaskHandler{testTaskHandler1, testTaskHandler2}
+	handlers := []idtpf.TaskHandler{
+		testTaskHandler1,
+		testTaskHandler2,
+		testTaskHandlerForTaskGroup1,
+		testTaskHandlerForTaskGroup2,
+	}
 	for i := range handlers {
-		t.Run("handler"+strconv.Itoa(i+1)+"-Do", func(t *testing.T) {
-			Do(handlers[i], errChan, initialTasks...)
-		})
-		t.Run("handler"+strconv.Itoa(i+1)+"-DoEx", func(t *testing.T) {
-			DoEx(testTaskMgrMaker,
-				handlers[i],
-				goctpf.WorkerSettings{Number: 4, SendErrTimeout: time.Nanosecond},
-				errChan,
-				initialTasks...)
-		})
+		if i < 2 {
+			t.Run("handler"+strconv.Itoa(i+1)+"-Do", func(t *testing.T) {
+				Do(handlers[i], errChan, initialTasks...)
+			})
+			t.Run("handler"+strconv.Itoa(i+1)+"-DoEx", func(t *testing.T) {
+				DoEx(testTaskMgrMaker,
+					handlers[i],
+					goctpf.WorkerSettings{Number: 4, SendErrTimeout: time.Nanosecond},
+					errChan,
+					initialTasks...)
+			})
+		} else {
+			t.Run("handlerForTaskGroup"+strconv.Itoa(i-1)+"-Start", func(t *testing.T) {
+				taskChan := make(chan interface{}, len(initialTasks))
+				dc := Start(handlers[i], taskChan, errChan)
+				testTaskGroup = goctpf.NewTaskGroup(dc)
+				for i := range initialTasks {
+					tgm := testTaskGroup.WrapTask(initialTasks[i])
+					taskChan <- tgm
+				}
+				close(taskChan)
+				testTaskGroup.Wait()
+			})
+			t.Run("handlerForTaskGroup"+strconv.Itoa(i-1)+"-StartEx", func(t *testing.T) {
+				taskChan := make(chan interface{}, len(initialTasks))
+				dc := StartEx(testTaskMgrMaker,
+					handlers[i],
+					goctpf.WorkerSettings{Number: 4, SendErrTimeout: time.Nanosecond},
+					taskChan,
+					errChan)
+				testTaskGroup = goctpf.NewTaskGroup(dc)
+				for i := range initialTasks {
+					tgm := testTaskGroup.WrapTask(initialTasks[i])
+					taskChan <- tgm
+				}
+				close(taskChan)
+				testTaskGroup.Wait()
+			})
+		}
 	}
 }

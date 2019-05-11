@@ -7,9 +7,10 @@ import (
 	"github.com/donyori/goctpf"
 )
 
-type testTaskMgr []int
+type testTaskMgr []interface{}
 
 var errTestError error = errors.New("error for test")
+var testTaskGroup *goctpf.TaskGroup
 
 func testTaskHandler1(task interface{}, errBuf *[]error) (
 	newTasks []interface{}, doesExit bool) {
@@ -40,6 +41,31 @@ func testTaskHandler2(task interface{}, errBuf *[]error) (
 	return
 }
 
+func testTaskHandlerForTaskGroup1(task interface{}, errBuf *[]error) (
+	newTasks []interface{}, doesExit bool) {
+	t := task.(*goctpf.TaskGroupMember)
+	fmt.Println(t.Task)
+	x := t.Task.(int)
+	if x < 10 {
+		newTasks = append(newTasks, testTaskGroup.WrapTask(x+1))
+	}
+	return
+}
+
+func testTaskHandlerForTaskGroup2(task interface{}, errBuf *[]error) (
+	newTasks []interface{}, doesExit bool) {
+	t := task.(*goctpf.TaskGroupMember)
+	fmt.Println(t.Task)
+	x := t.Task.(int)
+	for i := 0; i < 10; i++ {
+		newTasks = append(newTasks, testTaskGroup.WrapTask(x+10))
+	}
+	if x > 30 {
+		doesExit = true
+	}
+	return
+}
+
 func (ttm *testTaskMgr) Init() {
 	*ttm = nil
 }
@@ -53,9 +79,7 @@ func (ttm testTaskMgr) NumTask() int {
 }
 
 func (ttm *testTaskMgr) Add(source goctpf.Source, tasks ...interface{}) error {
-	for _, task := range tasks {
-		*ttm = append(*ttm, task.(int))
-	}
+	*ttm = append(*ttm, tasks...)
 	return nil
 }
 
