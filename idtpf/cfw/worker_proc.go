@@ -12,7 +12,8 @@ import (
 
 func workerProc(workerNo int,
 	taskHandler idtpf.TaskHandler,
-	setupAndTearDown *goctpf.SetupAndTearDown,
+	setup goctpf.Setup,
+	tearDown goctpf.TearDown,
 	sendErrTimeout time.Duration,
 	runningWg, taskWg *sync.WaitGroup,
 	taskInChan <-chan interface{},
@@ -24,9 +25,11 @@ func workerProc(workerNo int,
 	defer func() {
 		exitOutChan <- struct{}{}
 	}()
-	if setupAndTearDown != nil {
-		setupAndTearDown.Setup(workerNo)
-		defer setupAndTearDown.TearDown(workerNo)
+	if setup != nil {
+		setup(workerNo)
+	}
+	if tearDown != nil {
+		defer tearDown(workerNo)
 	}
 
 	// Create a timer for sending error, if necessary:

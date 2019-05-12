@@ -1,5 +1,4 @@
 package goctpf
 
-type SetupAndTearDown struct {
-	Setup, TearDown func(workerNo int)
-}
+type Setup func(workerNo int)
+type TearDown func(workerNo int)

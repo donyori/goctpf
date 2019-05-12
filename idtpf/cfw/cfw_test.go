@@ -36,11 +36,12 @@ func TestCFw(t *testing.T) {
 	for i := range handlers {
 		if i < 2 {
 			t.Run("handler"+strconv.Itoa(i+1)+"-Do", func(t *testing.T) {
-				Do(handlers[i], nil, errChan, initialTasks...)
+				Do(handlers[i], nil, nil, errChan, initialTasks...)
 			})
 			t.Run("handler"+strconv.Itoa(i+1)+"-DoEx", func(t *testing.T) {
 				DoEx(new(testTaskMgr),
 					handlers[i],
+					nil,
 					nil,
 					goctpf.WorkerSettings{Number: 4, SendErrTimeout: time.Nanosecond},
 					errChan,
@@ -49,7 +50,7 @@ func TestCFw(t *testing.T) {
 		} else {
 			t.Run("handlerForTaskGroup"+strconv.Itoa(i-1)+"-Start", func(t *testing.T) {
 				taskChan := make(chan interface{}, len(initialTasks))
-				dc := Start(handlers[i], nil, taskChan, errChan)
+				dc := Start(handlers[i], nil, nil, taskChan, errChan)
 				testTaskGroup = goctpf.NewTaskGroup(dc)
 				for i := range initialTasks {
 					tgm := testTaskGroup.WrapTask(initialTasks[i])
@@ -62,6 +63,7 @@ func TestCFw(t *testing.T) {
 				taskChan := make(chan interface{}, len(initialTasks))
 				dc := StartEx(new(testTaskMgr),
 					handlers[i],
+					nil,
 					nil,
 					goctpf.WorkerSettings{Number: 4, SendErrTimeout: time.Nanosecond},
 					taskChan,

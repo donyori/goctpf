@@ -8,13 +8,14 @@ import (
 )
 
 func Start(taskHandler idtpf.TaskHandler,
-	setupAndTearDown *goctpf.SetupAndTearDown,
+	setup goctpf.Setup,
+	tearDown goctpf.TearDown,
 	taskChan <-chan interface{},
 	workerErrChan chan<- error) <-chan struct{} {
 	doneChan := make(chan struct{})
 	go func() {
 		defer close(doneChan)
-		mainProc(prefab.LdgbTaskManagerMaker, taskHandler, setupAndTearDown,
+		mainProc(prefab.LdgbTaskManagerMaker, taskHandler, setup, tearDown,
 			*goctpf.NewWorkerSettings(), taskChan, workerErrChan)
 	}()
 	return doneChan
@@ -22,40 +23,43 @@ func Start(taskHandler idtpf.TaskHandler,
 
 func StartEx(taskMgrMaker goctpf.TaskManagerMaker,
 	taskHandler idtpf.TaskHandler,
-	setupAndTearDown *goctpf.SetupAndTearDown,
+	setup goctpf.Setup,
+	tearDown goctpf.TearDown,
 	workerSettings goctpf.WorkerSettings,
 	taskChan <-chan interface{},
 	workerErrChan chan<- error) <-chan struct{} {
 	doneChan := make(chan struct{})
 	go func() {
 		defer close(doneChan)
-		mainProc(taskMgrMaker, taskHandler, setupAndTearDown,
+		mainProc(taskMgrMaker, taskHandler, setup, tearDown,
 			workerSettings, taskChan, workerErrChan)
 	}()
 	return doneChan
 }
 
 func Do(taskHandler idtpf.TaskHandler,
-	setupAndTearDown *goctpf.SetupAndTearDown,
+	setup goctpf.Setup,
+	tearDown goctpf.TearDown,
 	workerErrChan chan<- error,
 	initialTasks ...interface{}) {
 	if len(initialTasks) == 0 {
 		return
 	}
-	mainProc(prefab.LdgbTaskManagerMaker, taskHandler, setupAndTearDown,
+	mainProc(prefab.LdgbTaskManagerMaker, taskHandler, setup, tearDown,
 		*goctpf.NewWorkerSettings(), util.InitialTasksToChan(initialTasks...),
 		workerErrChan)
 }
 
 func DoEx(taskMgrMaker goctpf.TaskManagerMaker,
 	taskHandler idtpf.TaskHandler,
-	setupAndTearDown *goctpf.SetupAndTearDown,
+	setup goctpf.Setup,
+	tearDown goctpf.TearDown,
 	workerSettings goctpf.WorkerSettings,
 	workerErrChan chan<- error,
 	initialTasks ...interface{}) {
 	if len(initialTasks) == 0 {
 		return
 	}
-	mainProc(taskMgrMaker, taskHandler, setupAndTearDown, workerSettings,
+	mainProc(taskMgrMaker, taskHandler, setup, tearDown, workerSettings,
 		util.InitialTasksToChan(initialTasks...), workerErrChan)
 }
