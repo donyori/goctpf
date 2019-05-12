@@ -4,12 +4,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/donyori/goctpf"
 	"github.com/donyori/goctpf/idtpf"
 	"github.com/donyori/goctpf/internal/util"
 	"github.com/donyori/gorecover"
 )
 
-func workerProc(taskHandler idtpf.TaskHandler,
+func workerProc(workerNo int,
+	taskHandler idtpf.TaskHandler,
+	setupAndTearDown *goctpf.SetupAndTearDown,
 	sendErrTimeout time.Duration,
 	runningWg, taskWg *sync.WaitGroup,
 	taskInChan <-chan interface{},
@@ -21,6 +24,10 @@ func workerProc(taskHandler idtpf.TaskHandler,
 	defer func() {
 		exitOutChan <- struct{}{}
 	}()
+	if setupAndTearDown != nil {
+		setupAndTearDown.Setup(workerNo)
+		defer setupAndTearDown.TearDown(workerNo)
+	}
 
 	// Create a timer for sending error, if necessary:
 	var timer *time.Timer
@@ -52,7 +59,7 @@ func workerProc(taskHandler idtpf.TaskHandler,
 				errBuf = errBuf[:0] // Clear errBuf, but keep the underlying array.
 				errToPanic = gorecover.Recover(func() {
 					defer util.PostProcessingOfTaskHandling(task)
-					newTasks, doesExit = taskHandler(task, &errBuf)
+					newTasks, doesExit = taskHandler(workerNo, task, &errBuf)
 					if doesExit {
 						doesContinue = false
 						return

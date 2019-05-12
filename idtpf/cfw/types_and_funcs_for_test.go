@@ -12,7 +12,7 @@ type testTaskMgr []interface{}
 var errTestError error = errors.New("error for test")
 var testTaskGroup *goctpf.TaskGroup
 
-func testTaskHandler1(task interface{}, errBuf *[]error) (
+func testTaskHandler1(workerNo int, task interface{}, errBuf *[]error) (
 	newTasks []interface{}, doesExit bool) {
 	fmt.Println(task)
 	x := task.(int)
@@ -28,7 +28,7 @@ func testTaskHandler1(task interface{}, errBuf *[]error) (
 	return
 }
 
-func testTaskHandler2(task interface{}, errBuf *[]error) (
+func testTaskHandler2(workerNo int, task interface{}, errBuf *[]error) (
 	newTasks []interface{}, doesExit bool) {
 	fmt.Println(task)
 	x := task.(int)
@@ -41,7 +41,7 @@ func testTaskHandler2(task interface{}, errBuf *[]error) (
 	return
 }
 
-func testTaskHandlerForTaskGroup1(task interface{}, errBuf *[]error) (
+func testTaskHandlerForTaskGroup1(workerNo int, task interface{}, errBuf *[]error) (
 	newTasks []interface{}, doesExit bool) {
 	t := task.(*goctpf.TaskGroupMember)
 	fmt.Println(t.Task)
@@ -52,7 +52,7 @@ func testTaskHandlerForTaskGroup1(task interface{}, errBuf *[]error) (
 	return
 }
 
-func testTaskHandlerForTaskGroup2(task interface{}, errBuf *[]error) (
+func testTaskHandlerForTaskGroup2(workerNo int, task interface{}, errBuf *[]error) (
 	newTasks []interface{}, doesExit bool) {
 	t := task.(*goctpf.TaskGroupMember)
 	fmt.Println(t.Task)

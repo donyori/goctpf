@@ -8,12 +8,13 @@ import (
 )
 
 func Start(taskHandler idtpf.TaskHandler,
+	setupAndTearDown *goctpf.SetupAndTearDown,
 	taskChan <-chan interface{},
 	workerErrChan chan<- error) <-chan struct{} {
 	doneChan := make(chan struct{})
 	go func() {
 		defer close(doneChan)
-		mainProc(prefab.LdgbTaskManagerMaker, taskHandler,
+		mainProc(prefab.LdgbTaskManagerMaker, taskHandler, setupAndTearDown,
 			*goctpf.NewWorkerSettings(), taskChan, workerErrChan)
 	}()
 	return doneChan
@@ -21,37 +22,40 @@ func Start(taskHandler idtpf.TaskHandler,
 
 func StartEx(taskMgrMaker goctpf.TaskManagerMaker,
 	taskHandler idtpf.TaskHandler,
+	setupAndTearDown *goctpf.SetupAndTearDown,
 	workerSettings goctpf.WorkerSettings,
 	taskChan <-chan interface{},
 	workerErrChan chan<- error) <-chan struct{} {
 	doneChan := make(chan struct{})
 	go func() {
 		defer close(doneChan)
-		mainProc(taskMgrMaker, taskHandler,
+		mainProc(taskMgrMaker, taskHandler, setupAndTearDown,
 			workerSettings, taskChan, workerErrChan)
 	}()
 	return doneChan
 }
 
 func Do(taskHandler idtpf.TaskHandler,
+	setupAndTearDown *goctpf.SetupAndTearDown,
 	workerErrChan chan<- error,
 	initialTasks ...interface{}) {
 	if len(initialTasks) == 0 {
 		return
 	}
-	mainProc(prefab.LdgbTaskManagerMaker, taskHandler,
+	mainProc(prefab.LdgbTaskManagerMaker, taskHandler, setupAndTearDown,
 		*goctpf.NewWorkerSettings(), util.InitialTasksToChan(initialTasks...),
 		workerErrChan)
 }
 
 func DoEx(taskMgrMaker goctpf.TaskManagerMaker,
 	taskHandler idtpf.TaskHandler,
+	setupAndTearDown *goctpf.SetupAndTearDown,
 	workerSettings goctpf.WorkerSettings,
 	workerErrChan chan<- error,
 	initialTasks ...interface{}) {
 	if len(initialTasks) == 0 {
 		return
 	}
-	mainProc(taskMgrMaker, taskHandler, workerSettings,
+	mainProc(taskMgrMaker, taskHandler, setupAndTearDown, workerSettings,
 		util.InitialTasksToChan(initialTasks...), workerErrChan)
 }

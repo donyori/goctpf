@@ -11,8 +11,10 @@ import (
 )
 
 // This func will panic if the taskMgr return an error except goctpf.ErrNoMoreTask.
-func workerProc(taskMgrMaker goctpf.TaskManagerMaker,
+func workerProc(workerNo int,
+	taskMgrMaker goctpf.TaskManagerMaker,
 	taskHandler idtpf.TaskHandler,
+	setupAndTearDown *goctpf.SetupAndTearDown,
 	sendErrTimeout time.Duration,
 	runningWg, taskWg *sync.WaitGroup,
 	doneDummyOnce *sync.Once,
@@ -25,6 +27,10 @@ func workerProc(taskMgrMaker goctpf.TaskManagerMaker,
 	defer func() {
 		exitOutChan <- struct{}{}
 	}()
+	if setupAndTearDown != nil {
+		setupAndTearDown.Setup(workerNo)
+		defer setupAndTearDown.TearDown(workerNo)
+	}
 
 	// Create a timer for sending error, if necessary:
 	var timer *time.Timer
@@ -162,7 +168,7 @@ func workerProc(taskMgrMaker goctpf.TaskManagerMaker,
 			errBuf = errBuf[:0] // Clear errBuf, but keep the underlying array.
 			errToPanic = gorecover.Recover(func() {
 				defer util.PostProcessingOfTaskHandling(task)
-				newTasks, doesExit = taskHandler(task, &errBuf)
+				newTasks, doesExit = taskHandler(workerNo, task, &errBuf)
 				if doesExit {
 					doesContinue = false
 					return

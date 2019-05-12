@@ -1,4 +1,4 @@
 package idtpf
 
-type TaskHandler func(task interface{}, errBuf *[]error) (
+type TaskHandler func(workerNo int, task interface{}, errBuf *[]error) (
 	newTasks []interface{}, doesExit bool)

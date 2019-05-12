@@ -11,6 +11,7 @@ import (
 
 func mainProc(taskMgrMaker goctpf.TaskManagerMaker,
 	taskHandler idtpf.TaskHandler,
+	setupAndTearDown *goctpf.SetupAndTearDown,
 	workerSettings goctpf.WorkerSettings,
 	appTaskChan <-chan interface{},
 	workerErrChan chan<- error) {
@@ -74,9 +75,9 @@ func mainProc(taskMgrMaker goctpf.TaskManagerMaker,
 	taskWg.Add(1) // Add one dummy task count, standing for taskChan is open.
 	for i := 0; i < n; i++ {
 		runningWg.Add(1)
-		go workerProc(taskMgrMaker, taskHandler, workerSettings.SendErrTimeout,
-			&runningWg, &taskWg, &doneDummyOnce, appTaskChan, tChan,
-			workerErrChan, dwChan, seChan, reChan)
+		go workerProc(i, taskMgrMaker, taskHandler, setupAndTearDown,
+			workerSettings.SendErrTimeout, &runningWg, &taskWg, &doneDummyOnce,
+			appTaskChan, tChan, workerErrChan, dwChan, seChan, reChan)
 	}
 	go proc.WorkerSupvProc(&runningWg, &taskWg, dwChan, dChan)
 
