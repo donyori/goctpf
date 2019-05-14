@@ -69,8 +69,11 @@ func mainProc(taskMgr goctpf.TaskManager,
 		// Done dummy task count if taskChan is enable, to avoid worker supervisor waiting forever.
 		if taskChan != nil {
 			taskWg.Done()
+			var task interface{}
 			// Drain taskChan and disable it for safety.
-			for range taskChan {
+			for task = range taskChan {
+				// Discard unsent tasks.
+				util.DiscardTask(task)
 			}
 			taskChan = nil
 		}
