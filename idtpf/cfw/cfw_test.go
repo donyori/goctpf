@@ -51,13 +51,17 @@ func TestCFw(t *testing.T) {
 			t.Run("handlerForTaskGroup"+strconv.Itoa(i-1)+"-Start", func(t *testing.T) {
 				taskChan := make(chan interface{}, len(initialTasks))
 				dc := Start(handlers[i], nil, nil, taskChan, errChan)
-				testTaskGroup = goctpf.NewTaskGroup(dc)
+				testTaskGroup = goctpf.NewTaskGroup(nil, nil)
 				for i := range initialTasks {
 					tgm := testTaskGroup.WrapTask(initialTasks[i])
 					taskChan <- tgm
 				}
 				close(taskChan)
 				testTaskGroup.Wait()
+				// Wait multiple times:
+				testTaskGroup.Wait()
+				testTaskGroup.Wait()
+				<-dc
 			})
 			t.Run("handlerForTaskGroup"+strconv.Itoa(i-1)+"-StartEx", func(t *testing.T) {
 				taskChan := make(chan interface{}, len(initialTasks))
@@ -68,13 +72,17 @@ func TestCFw(t *testing.T) {
 					goctpf.WorkerSettings{Number: 4, SendErrTimeout: time.Nanosecond},
 					taskChan,
 					errChan)
-				testTaskGroup = goctpf.NewTaskGroup(dc)
+				testTaskGroup = goctpf.NewTaskGroup(nil, nil)
 				for i := range initialTasks {
 					tgm := testTaskGroup.WrapTask(initialTasks[i])
 					taskChan <- tgm
 				}
 				close(taskChan)
 				testTaskGroup.Wait()
+				// Wait multiple times:
+				testTaskGroup.Wait()
+				testTaskGroup.Wait()
+				<-dc
 			})
 		}
 	}

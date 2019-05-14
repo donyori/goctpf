@@ -3,34 +3,29 @@ package goctpf
 import (
 	"errors"
 	"sync"
-	"sync/atomic"
 )
 
 type TaskGroup struct {
-	doneChan   <-chan struct{}
-	notifyChan chan struct{}
-	counter    int64
+	wg              sync.WaitGroup
+	doneH, discardH func(task interface{})
 }
 
 type TaskGroupMember struct {
 	Task interface{}
 
-	tg       *TaskGroup
-	doneOnce sync.Once
+	tg   *TaskGroup
+	once sync.Once // For Done or Discard.
 }
 
-func NewTaskGroup(doneChan <-chan struct{}) *TaskGroup {
-	return &TaskGroup{
-		doneChan:   doneChan,
-		notifyChan: make(chan struct{}, 1),
-	}
+func NewTaskGroup(doneHandler, discardHandler func(task interface{})) *TaskGroup {
+	return &TaskGroup{doneH: doneHandler, discardH: discardHandler}
 }
 
 func (tg *TaskGroup) WrapTask(task interface{}) *TaskGroupMember {
 	if tg == nil {
 		panic(errors.New("goctpf: task group is nil"))
 	}
-	atomic.AddInt64(&tg.counter, 1)
+	tg.wg.Add(1)
 	return &TaskGroupMember{Task: task, tg: tg}
 }
 
@@ -38,15 +33,7 @@ func (tg *TaskGroup) Wait() {
 	if tg == nil {
 		return
 	}
-	c := atomic.LoadInt64(&tg.counter)
-	for c > 0 {
-		select {
-		case <-tg.notifyChan:
-			c = atomic.LoadInt64(&tg.counter)
-		case <-tg.doneChan:
-			c = 0
-		}
-	}
+	tg.wg.Wait()
 }
 
 func (tgm *TaskGroupMember) GetTaskGroup() *TaskGroup {
@@ -60,11 +47,22 @@ func (tgm *TaskGroupMember) Done() {
 	if tgm == nil {
 		return
 	}
-	tgm.doneOnce.Do(func() {
-		c := atomic.AddInt64(&tgm.tg.counter, -1)
-		if c < 0 {
-			panic(errors.New("goctpf: counter of TaskGroup is negative"))
+	tgm.once.Do(func() {
+		tgm.tg.wg.Done()
+		if tgm.tg.doneH != nil {
+			tgm.tg.doneH(tgm)
 		}
-		tgm.tg.notifyChan <- struct{}{}
+	})
+}
+
+func (tgm *TaskGroupMember) Discard() {
+	if tgm == nil {
+		return
+	}
+	tgm.once.Do(func() {
+		tgm.tg.wg.Done()
+		if tgm.tg.discardH != nil {
+			tgm.tg.discardH(tgm)
+		}
 	})
 }

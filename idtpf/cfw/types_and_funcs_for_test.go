@@ -101,6 +101,18 @@ func (ttm testTaskMgr) Peek(purpose goctpf.Purpose) (task interface{}, err error
 	return ttm[len(ttm)-1], nil
 }
 
+func (ttm testTaskMgr) Scan(handler func(task interface{}) (doesStop bool)) error {
+	if len(ttm) == 0 || handler == nil {
+		return nil
+	}
+	for _, task := range ttm {
+		if handler(task) {
+			return nil
+		}
+	}
+	return nil
+}
+
 func (ttm *testTaskMgr) Clear() {
 	ttm.Init()
 }

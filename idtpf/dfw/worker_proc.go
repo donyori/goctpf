@@ -58,6 +58,7 @@ func workerProc(workerNo int,
 	curN := taskMgr.NumTask()
 	var delta int // For adjusting task counting.
 	defer func() {
+		_ = taskMgr.Scan(util.DiscardTask) // Ignore error.
 		// Remove undone tasks, to avoid worker supervisor waiting forever.
 		numUndone := taskMgr.NumTask()
 		if numUndone-curN != delta { // Panic when add or pick task.
@@ -131,6 +132,8 @@ func workerProc(workerNo int,
 				delta = 1
 				err = taskMgr.Add(goctpf.FromApp, task)
 				if err != nil {
+					// For Add(), discard task before panic.
+					util.DiscardTask(task)
 					panicErr(err)
 				}
 				curN = taskMgr.NumTask()
@@ -140,6 +143,8 @@ func workerProc(workerNo int,
 				delta = 1
 				err = taskMgr.Add(goctpf.FromOthers, task)
 				if err != nil {
+					// For Add(), discard task before panic.
+					util.DiscardTask(task)
 					panicErr(err)
 				}
 				curN = taskMgr.NumTask()
@@ -170,11 +175,11 @@ func workerProc(workerNo int,
 			}
 			errBuf = errBuf[:0] // Clear errBuf, but keep the underlying array.
 			errToPanic = gorecover.Recover(func() {
-				defer util.PostProcessingOfTaskHandling(task)
+				defer util.DoneTask(task)
 				newTasks, doesExit = taskHandler(workerNo, task, &errBuf)
 				if doesExit {
 					doesContinue = false
-					return
+					// return after add newTasks to taskMgr, in order to discard tasks conveniently.
 				}
 				delta = len(newTasks)
 				if delta > 0 {
@@ -182,10 +187,17 @@ func workerProc(workerNo int,
 				}
 				err = taskMgr.Add(goctpf.FromMe, newTasks...)
 				if err != nil {
+					// For Add(), discard task before panic.
+					for _, newTask := range newTasks {
+						util.DiscardTask(newTask)
+					}
 					panic(err)
 				}
 				curN = taskMgr.NumTask()
 				delta = 0
+				if doesExit {
+					return
+				}
 				toSendTask, err = taskMgr.Peek(goctpf.ForOthers)
 				if err == goctpf.ErrNoMoreTask {
 					toSendTask = nil

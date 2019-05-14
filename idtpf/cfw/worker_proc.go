@@ -41,9 +41,9 @@ func workerProc(workerNo int,
 	}
 
 	// Some variables used in the main loop:
-	var task, newTask interface{}
+	var task interface{}
 	var newTasks []interface{}
-	var newTasksLen, sentCount, unsentCount int
+	var newTasksLen, sentCount, unsentCount, i int
 	var doesExit bool
 	var errToPanic error
 	errBuf := make([]error, 0, 4)
@@ -61,17 +61,22 @@ func workerProc(workerNo int,
 				defer taskWg.Done() // Make sure taskWg.Done() can be executed at last.
 				errBuf = errBuf[:0] // Clear errBuf, but keep the underlying array.
 				errToPanic = gorecover.Recover(func() {
-					defer util.PostProcessingOfTaskHandling(task)
+					defer util.DoneTask(task)
 					newTasks, doesExit = taskHandler(workerNo, task, &errBuf)
+					newTasksLen = len(newTasks)
+					sentCount = 0
+					defer func() {
+						for i = sentCount; i < newTasksLen; i++ {
+							util.DiscardTask(newTasks[i])
+						}
+					}()
 					if doesExit {
 						doesContinue = false
 						return
 					}
-					newTasksLen = len(newTasks)
 					if newTasksLen == 0 {
 						return
 					}
-					sentCount = 0
 					taskWg.Add(newTasksLen)
 					defer func() {
 						unsentCount = newTasksLen - sentCount
@@ -80,13 +85,13 @@ func workerProc(workerNo int,
 							taskWg.Add(-unsentCount) // Adjust task counting.
 						}
 					}()
-					for _, newTask = range newTasks {
+					for sentCount < newTasksLen {
 						select {
 						case <-exitInChan: // Receive exit signal from main proc.
 							doesContinue = false
 							return
-						case taskOutChan <- newTask:
-							sentCount += 1
+						case taskOutChan <- newTasks[sentCount]:
+							sentCount++
 						}
 					}
 				}) // End of "gorecover.Recover()".

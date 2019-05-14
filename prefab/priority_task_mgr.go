@@ -75,6 +75,17 @@ func (ptm *PriorityTaskManager) Peek(purpose goctpf.Purpose) (
 	return
 }
 
+func (ptm *PriorityTaskManager) Scan(
+	handler func(task interface{}) (doesStop bool)) error {
+	if ptm == nil || ptm.pq == nil || ptm.pq.Len() == 0 || handler == nil {
+		return nil
+	}
+	ptm.pq.Scan(func(x Comparable) bool {
+		return handler(x)
+	})
+	return nil
+}
+
 func (ptm *PriorityTaskManager) Clear() {
 	if ptm != nil && ptm.pq != nil {
 		ptm.pq.Clear()

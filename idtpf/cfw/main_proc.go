@@ -7,6 +7,7 @@ import (
 	"github.com/donyori/goctpf"
 	"github.com/donyori/goctpf/idtpf"
 	"github.com/donyori/goctpf/internal/proc"
+	"github.com/donyori/goctpf/internal/util"
 )
 
 func mainProc(taskMgr goctpf.TaskManager,
@@ -55,6 +56,7 @@ func mainProc(taskMgr goctpf.TaskManager,
 	// Before workers starting, for safety.
 	defer func() {
 		close(exitOutChan)
+		_ = taskMgr.Scan(util.DiscardTask) // Ignore error.
 		// Remove unsent tasks, to avoid worker supervisor waiting forever.
 		numUnsent := taskMgr.NumTask()
 		if numUnsent-curN != delta { // Panic when add or pick task.
@@ -106,6 +108,8 @@ func mainProc(taskMgr goctpf.TaskManager,
 			delta = 1
 			err = taskMgr.Add(goctpf.FromApp, task)
 			if err != nil {
+				// For Add(), discard task before panic.
+				util.DiscardTask(task)
 				break
 			}
 			curN = taskMgr.NumTask()
@@ -117,6 +121,8 @@ func mainProc(taskMgr goctpf.TaskManager,
 			delta = 1
 			err = taskMgr.Add(goctpf.FromWorkers, task)
 			if err != nil {
+				// For Add(), discard task before panic.
+				util.DiscardTask(task)
 				break
 			}
 			curN = taskMgr.NumTask()

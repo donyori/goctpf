@@ -19,6 +19,9 @@ type TaskManager interface {
 	// Should return goctpf.ErrNoMoreTask if there is no task.
 	Peek(purpose Purpose) (task interface{}, err error)
 
+	// Scan all the tasks in any order, and handle them by the given handler.
+	Scan(handler func(task interface{}) (doesStop bool)) error
+
 	// Clear task manager.
 	// Sometimes it does the same thing as Init().
 	// This method should return directly when TaskManager is nil.

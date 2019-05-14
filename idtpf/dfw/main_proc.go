@@ -7,6 +7,7 @@ import (
 	"github.com/donyori/goctpf"
 	"github.com/donyori/goctpf/idtpf"
 	"github.com/donyori/goctpf/internal/proc"
+	"github.com/donyori/goctpf/internal/util"
 )
 
 func mainProc(taskMgrMaker goctpf.TaskManagerMaker,
@@ -53,11 +54,13 @@ func mainProc(taskMgrMaker goctpf.TaskManagerMaker,
 	// Before workers starting, for safety.
 	defer func() {
 		close(exitOutChan)
+		var task interface{}
 		// Done dummy task count if no one did it, to avoid worker supervisor waiting forever.
 		doneDummyOnce.Do(func() {
 			taskWg.Done()
-			// Drain appTaskChan for safety.
-			for range appTaskChan {
+			// Drain appTaskChan and discard undone tasks.
+			for task = range appTaskChan {
+				util.DiscardTask(task)
 			}
 		})
 		// Drain tChan and adjust task counting, to avoid worker supervisor waiting forever.
@@ -65,9 +68,12 @@ func mainProc(taskMgrMaker goctpf.TaskManagerMaker,
 			select {
 			case <-doneChan:
 				// Workers and worker supervisor exited. Return now.
+				// taskChan must be empty now.
 				return
-			case <-taskChan:
+			case task = <-taskChan:
 				taskWg.Done()
+				// Discard the task.
+				util.DiscardTask(task)
 			}
 		}
 	}()

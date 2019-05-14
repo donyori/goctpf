@@ -69,6 +69,19 @@ func (qtm *QueueTaskManager) Peek(purpose goctpf.Purpose) (
 	return front.Value, nil
 }
 
+func (qtm *QueueTaskManager) Scan(
+	handler func(task interface{}) (doesStop bool)) error {
+	if qtm == nil || qtm.ls == nil || handler == nil {
+		return nil
+	}
+	for e := qtm.ls.Front(); e != nil; e = e.Next() {
+		if handler(e.Value) {
+			return nil
+		}
+	}
+	return nil
+}
+
 func (qtm *QueueTaskManager) Clear() {
 	if qtm != nil && qtm.ls != nil {
 		qtm.ls.Init()
