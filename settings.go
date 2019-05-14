@@ -3,7 +3,6 @@ package goctpf
 import (
 	"encoding/json"
 	"io/ioutil"
-	"runtime"
 	"time"
 )
 
@@ -13,17 +12,7 @@ type WorkerSettings struct {
 }
 
 func NewWorkerSettings() *WorkerSettings {
-	maxProcs := runtime.GOMAXPROCS(0)
-	var n uint32
-	if maxProcs >= 0 {
-		n = uint32(maxProcs)
-	} else {
-		n = 0
-	}
-	return &WorkerSettings{
-		Number:         n,
-		SendErrTimeout: 0,
-	}
+	return new(WorkerSettings)
 }
 
 func LoadWorkerSettings(filename string) (settings *WorkerSettings, err error) {

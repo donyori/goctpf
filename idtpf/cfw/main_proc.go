@@ -2,6 +2,7 @@ package cfw
 
 import (
 	"errors"
+	"runtime"
 	"sync"
 
 	"github.com/donyori/goctpf"
@@ -23,8 +24,15 @@ func mainProc(taskMgr goctpf.TaskManager,
 	if taskHandler == nil {
 		panic(errors.New("goctpf: taskHandler is nil"))
 	}
-	if workerSettings.Number == 0 {
-		panic(errors.New("goctpf: the number of workers is 0"))
+
+	numWorker := workerSettings.Number
+	if numWorker == 0 {
+		maxprocs := runtime.GOMAXPROCS(0)
+		if maxprocs > 0 {
+			numWorker = uint32(maxprocs)
+		} else {
+			numWorker = 1
+		}
 	}
 
 	// Initialize task manager:
@@ -36,12 +44,12 @@ func mainProc(taskMgr goctpf.TaskManager,
 	var runningWg, taskWg sync.WaitGroup
 
 	// Channels:
-	stChan := make(chan interface{})                     // send task to workers
-	rtChan := make(chan interface{})                     // receive new task from workers. DON'T CLOSE IT!
-	seChan := make(chan struct{})                        // broadcast exit signal to workers
-	reChan := make(chan struct{}, workerSettings.Number) // receive exit quest from workers
-	dChan := make(chan struct{})                         // receive done signal from worker supervisor
-	dwChan := make(chan struct{})                        // for worker supervisor to broadcast done signal to workers
+	stChan := make(chan interface{})         // send task to workers
+	rtChan := make(chan interface{})         // receive new task from workers. DON'T CLOSE IT!
+	seChan := make(chan struct{})            // broadcast exit signal to workers
+	reChan := make(chan struct{}, numWorker) // receive exit quest from workers
+	dChan := make(chan struct{})             // receive done signal from worker supervisor
+	dwChan := make(chan struct{})            // for worker supervisor to broadcast done signal to workers
 
 	// Channels used in this goroutine:
 	var taskOutChan chan<- interface{} // = nil, disable this channel at the beginning
@@ -83,7 +91,7 @@ func mainProc(taskMgr goctpf.TaskManager,
 
 	// Start workers and worker supervisor:
 	taskWg.Add(1) // Add one dummy task count, standing for taskChan is open.
-	for i, n := 0, int(workerSettings.Number); i < n; i++ {
+	for i, n := 0, int(numWorker); i < n; i++ {
 		runningWg.Add(1)
 		go workerProc(i, taskHandler, setup, tearDown,
 			workerSettings.SendErrTimeout, &runningWg, &taskWg,

@@ -2,6 +2,7 @@ package dfw
 
 import (
 	"errors"
+	"runtime"
 	"sync"
 
 	"github.com/donyori/goctpf"
@@ -23,11 +24,16 @@ func mainProc(taskMgrMaker goctpf.TaskManagerMaker,
 	if taskHandler == nil {
 		panic(errors.New("goctpf: taskHandler is nil"))
 	}
-	if workerSettings.Number == 0 {
-		panic(errors.New("goctpf: the number of workers is 0"))
-	}
 
 	n := int(workerSettings.Number)
+	if n <= 0 {
+		maxprocs := runtime.GOMAXPROCS(0)
+		if maxprocs > 0 {
+			n = maxprocs
+		} else {
+			n = 1
+		}
+	}
 
 	// Wait groups:
 	// runningWg for check whether workers are exited or not.
