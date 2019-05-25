@@ -6,8 +6,8 @@ func DoneTask(task interface{}) bool {
 	if task == nil {
 		return false
 	}
-	if tgm, ok := task.(*goctpf.TaskGroupMember); ok {
-		tgm.Done()
+	if t, ok := task.(goctpf.DoneProcessor); ok {
+		t.Done()
 	}
 	return false
 }
@@ -16,8 +16,8 @@ func DiscardTask(task interface{}) bool {
 	if task == nil {
 		return false
 	}
-	if tgm, ok := task.(*goctpf.TaskGroupMember); ok {
-		tgm.Discard()
+	if t, ok := task.(goctpf.DiscardProcessor); ok {
+		t.Discard()
 	}
 	return false
 }
