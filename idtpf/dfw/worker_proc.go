@@ -18,7 +18,6 @@ func workerProc(workerNo int,
 	tearDown goctpf.TearDown,
 	sendErrTimeout time.Duration,
 	runningWg, taskWg *sync.WaitGroup,
-	doneDummyOnce *sync.Once,
 	appTaskChan <-chan interface{},
 	taskChan chan interface{},
 	errChan chan<- error,
@@ -73,90 +72,80 @@ func workerProc(workerNo int,
 	// Some variables used in the main loop:
 	var task, toSendTask interface{}
 	var newTasks []interface{}
-	var canSend, ok, doesExit bool
+	var canSend, doesExit bool
 	errBuf := make([]error, 0, 4)
 	var err, errToPanic error
 	doesContinue := true
 
 	// The main loop:
 	for doesContinue {
-		// Step 1:
-		// Try to send undone tasks to other workers if the number of undone tasks is greater than 1 (i.e. at least 2):
-		canSend = true
-		for canSend && toSendTask != nil && curN > 1 {
-			select {
-			case <-exitInChan: // Receive exit signal from main proc.
-				doesContinue = false
-				canSend = false
-			case <-doneChan: // Receive done signal from worker supervisor.
-				doesContinue = false
-				canSend = false
-			case taskChan <- toSendTask:
-				delta = -1
-				_, err = taskMgr.Pick(goctpf.ForOthers)
-				if err != nil {
-					panicErr(err) // err CANNOT be goctpf.ErrNoMoreTask.
+		if curN > 1 {
+			// Try to send undone tasks to other workers if the number of
+			// undone tasks is greater than 1 (i.e. at least 2):
+			canSend = true
+			for canSend && toSendTask != nil && curN > 1 {
+				select {
+				case <-exitInChan: // Receive exit signal from main proc.
+					doesContinue = false
+					canSend = false
+				case <-doneChan: // Receive done signal from worker supervisor.
+					doesContinue = false
+					canSend = false
+				case taskChan <- toSendTask:
+					delta = -1
+					_, err = taskMgr.Pick(goctpf.ForOthers)
+					if err != nil {
+						panicErr(err) // err CANNOT be goctpf.ErrNoMoreTask.
+					}
+					curN = taskMgr.NumTask()
+					delta = 0
+					toSendTask, err = taskMgr.Peek(goctpf.ForOthers)
+					if err == goctpf.ErrNoMoreTask {
+						toSendTask = nil
+					} else if err != nil {
+						panicErr(err)
+					}
+				default:
+					canSend = false
 				}
-				curN = taskMgr.NumTask()
-				delta = 0
-				toSendTask, err = taskMgr.Peek(goctpf.ForOthers)
-				if err == goctpf.ErrNoMoreTask {
-					toSendTask = nil
-				} else if err != nil {
-					panicErr(err)
+			}
+		} else {
+			// Receive a task from other workers if the number of undone tasks is 0:
+			for doesContinue && curN == 0 {
+				select {
+				case <-exitInChan: // Receive exit signal from main proc.
+					doesContinue = false
+				case <-doneChan: // Receive done signal from worker supervisor.
+					doesContinue = false
+				case task = <-appTaskChan: // Receive a task from APP.
+					delta = 1
+					err = taskMgr.Add(goctpf.FromApp, task)
+					if err != nil {
+						// For Add(), discard task before panic.
+						util.DiscardTask(task)
+						panicErr(err)
+					}
+					curN = taskMgr.NumTask()
+					delta = 0
+					// taskWg.Add() executed in the main process.
+				case task = <-taskChan: // Receive a task from other workers.
+					delta = 1
+					err = taskMgr.Add(goctpf.FromOthers, task)
+					if err != nil {
+						// For Add(), discard task before panic.
+						util.DiscardTask(task)
+						panicErr(err)
+					}
+					curN = taskMgr.NumTask()
+					delta = 0
+					// taskWg.Add() executed in the subsequent step.
 				}
-			default:
-				canSend = false
 			}
 		}
 		if !doesContinue {
 			break
 		}
 
-		// Step 2:
-		// Receive a task from other workers if the number of undone tasks is 0:
-		for doesContinue && curN == 0 {
-			select {
-			case <-exitInChan: // Receive exit signal from main proc.
-				doesContinue = false
-			case <-doneChan: // Receive done signal from worker supervisor.
-				doesContinue = false
-			case task, ok = <-appTaskChan: // Receive a task from APP.
-				if !ok {
-					doneDummyOnce.Do(func() {
-						taskWg.Done() // Done dummy task count, standing for taskChan is closed.
-					})
-					appTaskChan = nil // Disable appTaskChan.
-					break
-				}
-				delta = 1
-				err = taskMgr.Add(goctpf.FromApp, task)
-				if err != nil {
-					// For Add(), discard task before panic.
-					util.DiscardTask(task)
-					panicErr(err)
-				}
-				curN = taskMgr.NumTask()
-				delta = 0
-				taskWg.Add(1)
-			case task = <-taskChan: // Receive a task from other workers.
-				delta = 1
-				err = taskMgr.Add(goctpf.FromOthers, task)
-				if err != nil {
-					// For Add(), discard task before panic.
-					util.DiscardTask(task)
-					panicErr(err)
-				}
-				curN = taskMgr.NumTask()
-				delta = 0
-				// taskWg.Add() executed in Step 3.
-			}
-		}
-		if !doesContinue {
-			break
-		}
-
-		// Step 3:
 		// Pick and handle a task:
 		func() {
 			defer taskWg.Done() // Make sure taskWg.Done() can be executed at last.
@@ -217,6 +206,5 @@ func workerProc(workerNo int,
 		if errToPanic != nil {
 			panic(errToPanic)
 		}
-		// End of Step 3.
 	} // End of main loop.
 }

@@ -1,6 +1,7 @@
 package dfw
 
 import (
+	"container/list"
 	"errors"
 	"runtime"
 	"sync"
@@ -40,10 +41,11 @@ func mainProc(taskMgrMaker goctpf.TaskManagerMaker,
 	// taskWg for check whether all tasks are done or not.
 	var runningWg, taskWg sync.WaitGroup
 
-	// A sync.Once for Done dummy task count, standing for taskChan is closed.
-	var doneDummyOnce sync.Once
+	// Buffer for APP tasks:
+	appTaskBuf := list.New()
 
 	// Channels:
+	atChan := make(chan interface{})   // APP task. DON'T CLOSE IT!
 	seChan := make(chan struct{})      // broadcast exit signal to workers
 	reChan := make(chan struct{}, n)   // receive exit quest from workers
 	dChan := make(chan struct{})       // receive done signal from worker supervisor
@@ -51,6 +53,7 @@ func mainProc(taskMgrMaker goctpf.TaskManagerMaker,
 	dwChan := make(chan struct{})      // for worker supervisor to broadcast done signal to workers
 
 	// Channels used in this goroutine:
+	var appOutChan chan<- interface{} // = nil, disable this channel at the beginning
 	var exitOutChan chan<- struct{} = seChan
 	var exitInChan <-chan struct{} = reChan
 	var doneChan <-chan struct{} = dChan
@@ -60,15 +63,27 @@ func mainProc(taskMgrMaker goctpf.TaskManagerMaker,
 	// Before workers starting, for safety.
 	defer func() {
 		close(exitOutChan)
+		// Remove unsent tasks, to avoid worker supervisor waiting forever.
+		numUnsent := appTaskBuf.Len()
+		if numUnsent > 0 {
+			// Discard unsent tasks.
+			for e := appTaskBuf.Front(); e != nil; e = e.Next() {
+				util.DiscardTask(e.Value)
+			}
+			taskWg.Add(-numUnsent) // Adjust task counting.
+		}
+		appTaskBuf.Init() // Clear the buffer.
 		var task interface{}
-		// Done dummy task count if no one did it, to avoid worker supervisor waiting forever.
-		doneDummyOnce.Do(func() {
+		// Done dummy task count if appTaskChan is enable, to avoid worker supervisor waiting forever.
+		if appTaskChan != nil {
 			taskWg.Done()
 			// Drain appTaskChan and discard undone tasks.
 			for task = range appTaskChan {
 				util.DiscardTask(task)
 			}
-		})
+			// Disable appTaskChan for safety.
+			appTaskChan = nil
+		}
 		// Drain tChan and adjust task counting, to avoid worker supervisor waiting forever.
 		for {
 			select {
@@ -89,14 +104,43 @@ func mainProc(taskMgrMaker goctpf.TaskManagerMaker,
 	for i := 0; i < n; i++ {
 		runningWg.Add(1)
 		go workerProc(i, taskMgrMaker, taskHandler, setup, tearDown,
-			workerSettings.SendErrTimeout, &runningWg, &taskWg, &doneDummyOnce,
-			appTaskChan, tChan, workerErrChan, dwChan, seChan, reChan)
+			workerSettings.SendErrTimeout, &runningWg, &taskWg,
+			atChan, tChan, workerErrChan, dwChan, seChan, reChan)
 	}
 	go proc.WorkerSupvProc(&runningWg, &taskWg, dwChan, dChan)
 
-	// Wait for a worker asking to exit or all tasks done:
-	select {
-	case <-exitInChan: // A worker asks to exit.
-	case <-doneChan: // Receive done signal from worker supervisor.
+	var task, nextToSendTask interface{}
+	var front *list.Element
+	var ok bool
+	doesContinue := true
+	// The main loop:
+	for doesContinue {
+		select {
+		case <-exitInChan: // A worker asks to exit.
+			doesContinue = false
+		case task, ok = <-appTaskChan: // Buffer APP task.
+			if !ok {
+				taskWg.Done() // Done the dummy task count.
+				appTaskChan = nil
+				break
+			}
+			taskWg.Add(1)
+			appTaskBuf.PushBack(task)
+			if nextToSendTask == nil {
+				appOutChan = atChan // Enable appOutChan.
+				nextToSendTask = appTaskBuf.Front().Value
+			}
+		case appOutChan <- nextToSendTask: // After sending a buffered APP task.
+			appTaskBuf.Remove(appTaskBuf.Front())
+			front = appTaskBuf.Front()
+			if front != nil {
+				nextToSendTask = front.Value
+			} else {
+				appOutChan = nil // Disable appOutChan.
+				nextToSendTask = nil
+			}
+		case <-doneChan: // Receive done signal from worker supervisor.
+			doesContinue = false
+		}
 	}
 }
